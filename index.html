@@ -261,9 +261,28 @@
   }
 
   function currentTurnPlayer(room) {
+    return resolveTurn(room).player;
+  }
+
+  // 나간 사람(leftPlayers)을 건너뛰고 실제 차례인 사람과 그 인덱스를 찾는다.
+  function resolveTurn(room) {
     const players = room.players || [];
-    if (players.length === 0) return null;
-    return players[(room.turnIndex || 0) % players.length];
+    const leftPlayers = room.leftPlayers || [];
+    if (players.length === 0) return { player: null, index: 0 };
+    const activeExists = players.some((p) => !leftPlayers.includes(p.name));
+    if (!activeExists) return { player: null, index: 0 };
+    let idx = (room.turnIndex || 0) % players.length;
+    let guard = 0;
+    while (leftPlayers.includes(players[idx].name) && guard < players.length) {
+      idx = (idx + 1) % players.length;
+      guard++;
+    }
+    return { player: players[idx], index: idx };
+  }
+
+  function activePlayers(room) {
+    const leftPlayers = room.leftPlayers || [];
+    return (room.players || []).filter((p) => !leftPlayers.includes(p.name));
   }
 
   function stopTurnTimer() {
@@ -299,13 +318,12 @@
 
   async function handleTimeout() {
     const fresh = (await fetchRoom()) || state.room;
-    const players = fresh.players || [];
-    const turnIndex = fresh.turnIndex || 0;
-    const turnPlayer = players.length > 0 ? players[turnIndex % players.length] : null;
+    const { player: turnPlayer, index: turnIdx } = resolveTurn(fresh);
     if (!turnPlayer || turnPlayer.name !== state.nickname.trim() || fresh.completed) {
       return; // 이미 다른 사람이 처리했거나 차례가 넘어감
     }
-    const nextTurnIndex = players.length > 0 ? (turnIndex + 1) % players.length : 0;
+    const players = fresh.players || [];
+    const nextTurnIndex = players.length > 0 ? (turnIdx + 1) % players.length : 0;
     const next = { ...fresh, turnIndex: nextTurnIndex, hintedIndex: null };
     const { ok } = await writeRoom(next);
     if (ok) state.room = next;
@@ -347,8 +365,7 @@
 
     const fresh = (await fetchRoom()) || state.room;
     const players = fresh.players || [];
-    const turnIndex = fresh.turnIndex || 0;
-    const turnPlayer = players.length > 0 ? players[turnIndex % players.length] : null;
+    const { player: turnPlayer, index: turnIdx } = resolveTurn(fresh);
 
     if (turnPlayer && turnPlayer.name !== state.nickname.trim()) {
       state.loading = false;
@@ -358,7 +375,7 @@
     }
 
     const idx = fresh.words.findIndex((w, i) => fresh.blankMask[i] && normalize(w) === guess);
-    const nextTurnIndex = players.length > 0 ? (turnIndex + 1) % players.length : 0;
+    const nextTurnIndex = players.length > 0 ? (turnIdx + 1) % players.length : 0;
 
     if (idx === -1) {
       const next = { ...fresh, turnIndex: nextTurnIndex };
@@ -488,7 +505,10 @@
   function renderGame() {
     const room = state.room;
     const players = room.players || [];
-    const scores = Object.entries(room.scores || {}).sort((a, b) => b[1] - a[1]);
+    const leftPlayers = room.leftPlayers || [];
+    const scores = Object.entries(room.scores || {})
+      .filter(([name]) => !leftPlayers.includes(name))
+      .sort((a, b) => b[1] - a[1]);
     const playerColor = (name) => (players.find((p) => p.name === name) || {}).color || "#C9A227";
     const remaining = (room.blankMask || []).filter(Boolean).length;
     const turnPlayer = currentTurnPlayer(room);

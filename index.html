@@ -166,8 +166,8 @@
   };
 
   const TURN_SECONDS = 20;
-  const HEARTBEAT_MS = 12000;
-  const STALE_MS = 30000;
+  const HEARTBEAT_MS = 5000;
+  const STALE_MS = 12000;
 
   let pollTimer = null;
 
@@ -251,6 +251,20 @@
     if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
     state.heartbeatTimer = null;
   }
+
+  // 탭을 닫거나 새로고침/다른 페이지로 이동할 때, 가능한 경우 즉시 "나감" 신호를 보낸다.
+  window.addEventListener("pagehide", () => {
+    const name = state.nickname.trim();
+    if (!state.roomCode || !name) return;
+    if (state.screen !== "lobby" && state.screen !== "game") return;
+    try {
+      const payload = JSON.stringify({ __action: "leave", name });
+      const blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon(`/.netlify/functions/room?code=${encodeURIComponent(state.roomCode)}`, blob);
+    } catch (e) {
+      // 지원 안 하는 브라우저면 하트비트 끊김으로 결국 감지됨
+    }
+  });
 
   async function handleStart() {
     const name = state.nickname.trim();

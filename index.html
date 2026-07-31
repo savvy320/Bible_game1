@@ -161,7 +161,7 @@
   async function fetchRoom() {
     if (!state.roomCode) return null;
     try {
-      const res = await fetch(`/api/room?code=${encodeURIComponent(state.roomCode)}`);
+      const res = await fetch(`/.netlify/functions/room?code=${encodeURIComponent(state.roomCode)}`);
       if (!res.ok) return null;
       const data = await res.json();
       return data.value || null;
@@ -173,7 +173,7 @@
   async function writeRoom(next) {
     if (!state.roomCode) return { ok: false, reason: "no room" };
     try {
-      const res = await fetch(`/api/room?code=${encodeURIComponent(state.roomCode)}`, {
+      const res = await fetch(`/.netlify/functions/room?code=${encodeURIComponent(state.roomCode)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),

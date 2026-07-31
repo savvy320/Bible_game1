@@ -219,6 +219,17 @@
         if (state.screen === "lobby" && data.started) {
           state.screen = "game";
         }
+
+        // 워치독: 내 차례가 아닌데 현재 차례가 제한시간을 넘겼으면, 대신 다음 차례로 넘겨준다.
+        // (차례인 사람이 갑자기 사라져도 게임이 멈추지 않도록)
+        if (state.screen === "game" && !data.completed) {
+          const { player: tp } = resolveTurn(data);
+          const isMine = tp && tp.name === state.nickname.trim();
+          if (!isMine && tp && data.turnStartedAt && Date.now() - data.turnStartedAt > TURN_SECONDS * 1000) {
+            forceAdvanceStaleTurn();
+          }
+        }
+
         const active = document.activeElement;
         const typing = active && active.id === "vg-guess-input";
         if (!typing) render();
@@ -310,7 +321,7 @@
     state.loading = true;
     render();
     const fresh = (await fetchRoom()) || state.room;
-    const next = { ...fresh, started: true };
+    const next = { ...fresh, started: true, turnStartedAt: Date.now() };
     const { ok } = await writeRoom(next);
     state.loading = false;
     if (ok) {
@@ -369,6 +380,15 @@
     state.lastTurnKey = key;
     state.timeLeft = TURN_SECONDS;
     state.timerInterval = setInterval(tickTurnTimer, 1000);
+    stampMyTurnStart(); // 건너뛰기로 내 차례가 된 경우 등, 서버의 시작 시각을 지금으로 맞춘다
+  }
+
+  async function stampMyTurnStart() {
+    const fresh = await fetchRoom();
+    if (!fresh || fresh.completed) return;
+    const { player: tp } = resolveTurn(fresh);
+    if (!tp || tp.name !== state.nickname.trim()) return; // 그 사이 상황이 바뀌었으면 건너뜀
+    await writeRoom({ ...fresh, turnStartedAt: Date.now() });
   }
 
   function tickTurnTimer() {
@@ -391,12 +411,26 @@
     }
     const players = fresh.players || [];
     const nextTurnIndex = players.length > 0 ? (turnIdx + 1) % players.length : 0;
-    const next = { ...fresh, turnIndex: nextTurnIndex, hintedIndex: null };
+    const next = { ...fresh, turnIndex: nextTurnIndex, hintedIndex: null, turnStartedAt: Date.now() };
     const { ok } = await writeRoom(next);
     if (ok) state.room = next;
     state.error = "시간이 초과되어 다음 사람 차례로 넘어가요.";
     state.input = "";
     render();
+  }
+
+  // 다른 참가자가(내 차례가 아닌데도) 현재 차례의 제한시간 초과를 대신 처리한다.
+  // 차례인 사람이 응답 없이 사라졌을 때 게임이 멈추지 않도록 하기 위함.
+  async function forceAdvanceStaleTurn() {
+    const fresh = await fetchRoom();
+    if (!fresh || fresh.completed) return;
+    if (!fresh.turnStartedAt || Date.now() - fresh.turnStartedAt < TURN_SECONDS * 1000) return; // 이미 처리됨
+    const { player: turnPlayer, index: turnIdx } = resolveTurn(fresh);
+    if (!turnPlayer) return;
+    const players = fresh.players || [];
+    const nextTurnIndex = players.length > 0 ? (turnIdx + 1) % players.length : 0;
+    const next = { ...fresh, turnIndex: nextTurnIndex, hintedIndex: null, turnStartedAt: Date.now() };
+    await writeRoom(next);
   }
 
   async function handleHint() {
@@ -445,7 +479,7 @@
     const nextTurnIndex = players.length > 0 ? (turnIdx + 1) % players.length : 0;
 
     if (idx === -1) {
-      const next = { ...fresh, turnIndex: nextTurnIndex };
+      const next = { ...fresh, turnIndex: nextTurnIndex, turnStartedAt: Date.now() };
       const { ok } = await writeRoom(next);
       state.loading = false;
       if (ok) state.room = next;
@@ -464,7 +498,7 @@
     scores[state.nickname.trim()] = (scores[state.nickname.trim()] || 0) + points;
     const completed = !blankMask.some(Boolean);
 
-    const next = { ...fresh, players, scores, blankMask, completed, turnIndex: nextTurnIndex, hintedIndex: null };
+    const next = { ...fresh, players, scores, blankMask, completed, turnIndex: nextTurnIndex, hintedIndex: null, turnStartedAt: Date.now() };
     const { ok, reason } = await writeRoom(next);
     state.loading = false;
     if (!ok) {
@@ -498,6 +532,7 @@
       host: fresh.host || null,
       started: true,
       turnIndex: 0,
+      turnStartedAt: Date.now(),
     };
     const { ok } = await writeRoom(next);
     state.loading = false;

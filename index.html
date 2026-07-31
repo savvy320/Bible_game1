@@ -193,6 +193,17 @@
     }
   }
 
+  async function deleteRoom() {
+    if (!state.roomCode) return;
+    try {
+      await fetch(`/.netlify/functions/room?code=${encodeURIComponent(state.roomCode)}`, {
+        method: "DELETE",
+      });
+    } catch (e) {
+      // 삭제 실패해도 나가기 자체는 진행
+    }
+  }
+
   function startPolling() {
     stopPolling();
     const poll = async () => {
@@ -232,7 +243,8 @@
     if (!players.find((p) => p.name === name)) {
       players = [...players, { name, color: colorForIndex(players.length) }];
     }
-    const next = { ...data, players };
+    const leftPlayers = (data.leftPlayers || []).filter((n) => n !== name);
+    const next = { ...data, players, leftPlayers };
 
     const { ok, reason } = await writeRoom(next);
     state.loading = false;
@@ -400,9 +412,24 @@
     render();
   }
 
-  function handleLeave() {
+  async function handleLeave() {
     stopPolling();
     stopTurnTimer();
+
+    const name = state.nickname.trim();
+    const code = state.roomCode;
+    if (code && name) {
+      const fresh = (await fetchRoom()) || state.room;
+      const players = fresh.players || [];
+      const leftPlayers = Array.from(new Set([...(fresh.leftPlayers || []), name]));
+      const allLeft = players.length > 0 && players.every((p) => leftPlayers.includes(p.name));
+      if (allLeft) {
+        await deleteRoom();
+      } else {
+        await writeRoom({ ...fresh, leftPlayers });
+      }
+    }
+
     state.screen = "join";
     state.roomCode = "";
     state.room = emptyRoom();

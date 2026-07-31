@@ -162,9 +162,12 @@
     timeLeft: 10,
     timerInterval: null,
     lastTurnKey: null,
+    heartbeatTimer: null,
   };
 
   const TURN_SECONDS = 20;
+  const HEARTBEAT_MS = 12000;
+  const STALE_MS = 30000;
 
   let pollTimer = null;
 
@@ -229,6 +232,26 @@
     pollTimer = null;
   }
 
+  async function sendHeartbeat() {
+    const name = state.nickname.trim();
+    if (!state.roomCode || !name) return;
+    const fresh = await fetchRoom();
+    if (!fresh) return;
+    const lastSeen = { ...(fresh.lastSeen || {}), [name]: Date.now() };
+    await writeRoom({ ...fresh, lastSeen });
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    sendHeartbeat();
+    state.heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
+  }
+
+  function stopHeartbeat() {
+    if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
+    state.heartbeatTimer = null;
+  }
+
   async function handleStart() {
     const name = state.nickname.trim();
     if (!name) {
@@ -251,7 +274,8 @@
     }
     const leftPlayers = (data.leftPlayers || []).filter((n) => n !== name);
     const host = data.host || name; // 방을 처음 만든 사람이 방장
-    const next = { ...data, players, leftPlayers, host };
+    const lastSeen = { ...(data.lastSeen || {}), [name]: Date.now() };
+    const next = { ...data, players, leftPlayers, host, lastSeen };
 
     const { ok, reason } = await writeRoom(next);
     state.loading = false;
@@ -265,6 +289,7 @@
     state.screen = next.started ? "game" : "lobby";
     render();
     startPolling();
+    startHeartbeat();
   }
 
   async function handleStartGame() {
@@ -285,16 +310,24 @@
     return resolveTurn(room).player;
   }
 
-  // 나간 사람(leftPlayers)을 건너뛰고 실제 차례인 사람과 그 인덱스를 찾는다.
+  // 명시적으로 나갔거나(leftPlayers), 하트비트가 끊긴 지 STALE_MS 이상 지난 사람은 비활성으로 본다.
+  function isPlayerActive(room, name) {
+    const leftPlayers = room.leftPlayers || [];
+    if (leftPlayers.includes(name)) return false;
+    const lastSeen = (room.lastSeen || {})[name];
+    if (!lastSeen) return true; // 아직 하트비트 기록 전(막 참가) → 우선 활성으로 간주
+    return Date.now() - lastSeen < STALE_MS;
+  }
+
+  // 비활성 참가자를 건너뛰고 실제 차례인 사람과 그 인덱스를 찾는다.
   function resolveTurn(room) {
     const players = room.players || [];
-    const leftPlayers = room.leftPlayers || [];
     if (players.length === 0) return { player: null, index: 0 };
-    const activeExists = players.some((p) => !leftPlayers.includes(p.name));
+    const activeExists = players.some((p) => isPlayerActive(room, p.name));
     if (!activeExists) return { player: null, index: 0 };
     let idx = (room.turnIndex || 0) % players.length;
     let guard = 0;
-    while (leftPlayers.includes(players[idx].name) && guard < players.length) {
+    while (!isPlayerActive(room, players[idx].name) && guard < players.length) {
       idx = (idx + 1) % players.length;
       guard++;
     }
@@ -302,8 +335,7 @@
   }
 
   function activePlayers(room) {
-    const leftPlayers = room.leftPlayers || [];
-    return (room.players || []).filter((p) => !leftPlayers.includes(p.name));
+    return (room.players || []).filter((p) => isPlayerActive(room, p.name));
   }
 
   function stopTurnTimer() {
@@ -448,6 +480,7 @@
       players: fresh.players || [],
       scores: fresh.scores || {},
       leftPlayers: fresh.leftPlayers || [],
+      lastSeen: fresh.lastSeen || {},
       host: fresh.host || null,
       started: true,
       turnIndex: 0,
@@ -461,6 +494,7 @@
   async function handleLeave() {
     stopPolling();
     stopTurnTimer();
+    stopHeartbeat();
 
     const name = state.nickname.trim();
     const code = state.roomCode;
@@ -491,6 +525,7 @@
     }
     stopPolling();
     stopTurnTimer();
+    stopHeartbeat();
     await deleteRoom();
     state.screen = "join";
     state.roomCode = "";
@@ -556,8 +591,7 @@
 
   function renderLobby() {
     const room = state.room;
-    const leftPlayers = room.leftPlayers || [];
-    const activeList = (room.players || []).filter((p) => !leftPlayers.includes(p.name));
+    const activeList = activePlayers(room);
     const isHost = !!room.host && room.host === state.nickname.trim();
 
     const chipsHtml = activeList.length === 0
@@ -596,9 +630,10 @@
   function renderGame() {
     const room = state.room;
     const players = room.players || [];
-    const leftPlayers = room.leftPlayers || [];
-    const scores = Object.entries(room.scores || {})
-      .filter(([name]) => !leftPlayers.includes(name))
+    const scoreMap = room.scores || {};
+    const scores = players
+      .filter((p) => isPlayerActive(room, p.name))
+      .map((p) => [p.name, scoreMap[p.name] || 0])
       .sort((a, b) => b[1] - a[1]);
     const playerColor = (name) => (players.find((p) => p.name === name) || {}).color || "#C9A227";
     const remaining = (room.blankMask || []).filter(Boolean).length;

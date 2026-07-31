@@ -277,6 +277,21 @@
     }
   });
 
+  async function claimHost(name) {
+    try {
+      const res = await fetch(`/.netlify/functions/room?code=${encodeURIComponent(state.roomCode)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ __action: "claim-host", name }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.host || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function handleStart() {
     const name = state.nickname.trim();
     if (!name) {
@@ -298,18 +313,23 @@
       players = [...players, { name, color: colorForIndex(players.length) }];
     }
     const leftPlayers = (data.leftPlayers || []).filter((n) => n !== name);
-    const host = data.host || name; // 방을 처음 만든 사람이 방장
     const lastSeen = { ...(data.lastSeen || {}), [name]: Date.now() };
-    const next = { ...data, players, leftPlayers, host, lastSeen };
+    const next = { ...data, players, leftPlayers, lastSeen };
 
     const { ok, reason } = await writeRoom(next);
-    state.loading = false;
     if (!ok) {
+      state.loading = false;
       state.roomCode = "";
       state.error = `방을 만들지 못했어요. (${reason})`;
       render();
       return;
     }
+
+    // 방장은 서버에서 "아직 없을 때만" 지정하는 원자적 요청으로 확정 (동시 참가 경쟁 상태 방지)
+    const resolvedHost = await claimHost(name);
+    next.host = resolvedHost || next.host || name;
+
+    state.loading = false;
     state.room = next;
     state.screen = next.started ? "game" : "lobby";
     render();

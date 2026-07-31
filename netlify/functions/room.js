@@ -43,6 +43,24 @@ export default async (req) => {
       });
     }
 
+    // 방장 확정: 아직 host가 없을 때만 지정하고, 이미 있으면 그대로 둔다 (선착순, 경쟁 상태 방지)
+    if (body && body.__action === "claim-host" && body.name) {
+      const current = (await store.get(code, { type: "json" })) || null;
+      if (!current) {
+        return new Response(JSON.stringify({ ok: false, error: "room not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (!current.host) {
+        current.host = body.name;
+        await store.setJSON(code, current);
+      }
+      return new Response(JSON.stringify({ ok: true, host: current.host }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     await store.setJSON(code, body);
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json" },

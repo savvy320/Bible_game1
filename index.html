@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>말씀 채우기</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  #vg-app {
+    min-height: 100vh;
+    background: #1B1512;
+    color: #EDE0C8;
+    font-family: 'Noto Sans KR', sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  .vg-serif { font-family: 'Noto Serif KR', serif; }
+  .vg-scroll::-webkit-scrollbar { width: 6px; }
+  .vg-scroll::-webkit-scrollbar-thumb { background: rgba(237,224,200,0.2); border-radius: 3px; }
+  @keyframes vg-glow {
+    0% { box-shadow: 0 0 0 rgba(201,162,39,0); transform: scale(0.9); }
+    40% { box-shadow: 0 0 16px rgba(201,162,39,0.6); transform: scale(1.05); }
+    100% { box-shadow: 0 0 0 rgba(201,162,39,0); transform: scale(1); }
+  }
+  .vg-fill { animation: vg-glow 0.7s ease-out; }
+  @keyframes vg-fade {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .vg-toast { animation: vg-fade 0.25s ease-out; }
+  #vg-app input:focus { outline: none; }
+  #vg-app button { font-family: inherit; }
+  #vg-app button:disabled { opacity: 0.5; cursor: default; }
+
+  .vg-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .vg-card { width: 100%; max-width: 380px; background: #241C17; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+  .vg-badge { margin: 0 auto 14px; width: fit-content; padding: 8px 20px; border: 2px solid #C9A227; border-radius: 999px; background: rgba(201,162,39,0.08); }
+  .vg-badge-text { font-size: 20px; font-weight: 700; color: #C9A227; }
+  .vg-sub { text-align: center; font-size: 13px; opacity: 0.75; margin-bottom: 22px; line-height: 1.5; }
+  .vg-label { font-size: 12px; opacity: 0.7; margin-bottom: 6px; display: block; }
+  .vg-input-field {
+    width: 100%; background: #1B1512; border: 1px solid rgba(237,224,200,0.2); border-radius: 10px;
+    padding: 12px 14px; color: #EDE0C8; font-size: 16px; margin-bottom: 16px;
+  }
+  .vg-error-text { color: #E08A6E; font-size: 13px; margin-bottom: 12px; }
+  .vg-primary-btn {
+    width: 100%; background: #C9A227; color: #1B1512; border: none; border-radius: 12px;
+    padding: 14px 0; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .vg-rule-box { margin-top: 20px; padding: 14px; background: rgba(237,224,200,0.06); border-radius: 12px; }
+  .vg-rule-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; color: #C9A227; }
+  .vg-rule-text { font-size: 12.5px; line-height: 1.6; opacity: 0.85; }
+
+  .vg-game-wrap { flex: 1; display: flex; flex-direction: column; height: 100vh; max-width: 480px; margin: 0 auto; width: 100%; }
+  .vg-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; }
+  .vg-header-label { font-size: 10px; opacity: 0.6; margin-bottom: 2px; }
+  .vg-room-code-btn { background: none; border: none; color: #C9A227; font-size: 18px; font-weight: 700; letter-spacing: 2px; padding: 0; cursor: pointer; }
+  .vg-leave-btn { background: rgba(237,224,200,0.08); border: 1px solid rgba(237,224,200,0.15); color: #EDE0C8; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; cursor: pointer; }
+  .vg-score-row { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 10px; }
+  .vg-score-empty { font-size: 12.5px; opacity: 0.6; }
+  .vg-score-chip { display: flex; align-items: center; gap: 6px; background: rgba(237,224,200,0.06); border: 1px solid; border-radius: 999px; padding: 6px 10px; font-size: 12.5px; flex-shrink: 0; white-space: nowrap; }
+  .vg-score-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .vg-score-count { opacity: 0.7; }
+
+  .vg-turn-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 10px; font-size: 13.5px; }
+  .vg-turn-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .vg-turn-text { opacity: 0.85; }
+  .vg-turn-text-mine { color: #C9A227; font-weight: 700; }
+
+  .vg-verse-area { flex: 1; overflow-y: auto; padding: 8px 20px 16px; }
+  .vg-ref-badge { text-align: center; font-size: 13px; color: #C9A227; font-weight: 700; margin-bottom: 18px; letter-spacing: 1px; }
+  .vg-verse-line { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .vg-word-tile { background: #EDE0C8; color: #3A2C1D; padding: 8px 12px; border-radius: 6px; font-size: 17px; font-weight: 500; box-shadow: 0 2px 0 rgba(0,0,0,0.2); }
+  .vg-blank-tile { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 6px; font-size: 17px; color: rgba(201,162,39,0.6); border: 1.5px dashed rgba(201,162,39,0.45); background: rgba(201,162,39,0.05); letter-spacing: 2px; }
+  .vg-remaining-text { text-align: center; font-size: 12.5px; opacity: 0.6; margin-top: 22px; }
+  .vg-complete-box { text-align: center; margin-top: 26px; }
+  .vg-complete-title { font-size: 16px; font-weight: 700; color: #C9A227; margin-bottom: 12px; }
+  .vg-next-btn { background: #C9A227; color: #1B1512; border: none; border-radius: 12px; padding: 12px 24px; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+  .vg-flash-toast { position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%); background: #4E8C7A; color: #1B1512; padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+  .vg-error-toast { padding: 0 16px 8px; color: #E08A6E; font-size: 12.5px; text-align: center; }
+  .vg-hint-text { padding: 0 16px 8px; color: #C9A227; font-size: 13px; text-align: center; font-weight: 700; letter-spacing: 1px; }
+  .vg-input-bar { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(237,224,200,0.1); background: #241C17; }
+  .vg-game-input { flex: 1; background: #1B1512; border: 1px solid rgba(237,224,200,0.2); border-radius: 12px; padding: 12px 14px; color: #EDE0C8; font-size: 16px; }
+  .vg-hint-btn { background: rgba(201,162,39,0.12); color: #C9A227; border: 1px solid #C9A227; border-radius: 12px; padding: 0 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .vg-submit-btn { background: #C9A227; color: #1B1512; border: none; border-radius: 12px; padding: 0 20px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .vg-submit-btn:disabled, .vg-game-input:disabled, .vg-hint-btn:disabled { opacity: 0.5; }
+</style>
+</head>
+<body>
+<div id="vg-app"></div>
+
+<script>
+(function () {
+  const PALETTE = ["#C9A227", "#8B3A3A", "#3E6B5C", "#5B6FA6", "#946A9E", "#A96A3B", "#4E8C7A"];
+  const colorForIndex = (i) => PALETTE[i % PALETTE.length];
+
+  const VERSES = [
+    { ref: "창세기 1:1", text: "태초에 하나님이 천지를 창조하시니라" },
+    { ref: "시편 23:1", text: "여호와는 나의 목자시니 내게 부족함이 없으리로다" },
+    { ref: "시편 46:1", text: "하나님은 우리의 피난처시요 힘이시니 환난 중에 만날 큰 도움이시라" },
+    { ref: "시편 118:24", text: "이 날은 여호와께서 정하신 것이라 이 날에 우리가 즐거워하고 기뻐하리로다" },
+    { ref: "잠언 3:5", text: "너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라" },
+    { ref: "이사야 40:31", text: "오직 여호와를 앙망하는 자는 새 힘을 얻으리니 독수리가 날개치며 올라감 같을 것이요" },
+    { ref: "요한복음 3:16", text: "하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 그를 믿는 자마다 멸망하지 않고 영생을 얻게 하려 하심이라" },
+    { ref: "마태복음 6:33", text: "너희는 먼저 그의 나라와 그의 의를 구하라 그리하면 이 모든 것을 너희에게 더하시리라" },
+    { ref: "로마서 8:28", text: "하나님을 사랑하는 자 곧 그의 뜻대로 부르심을 입은 자들에게는 모든 것이 합력하여 선을 이루느니라" },
+    { ref: "빌립보서 4:13", text: "내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느니라" },
+    { ref: "빌립보서 4:6", text: "아무것도 염려하지 말고 다만 모든 일에 기도와 간구로 너희 구할 것을 감사함으로 하나님께 아뢰라" },
+    { ref: "여호수아 1:9", text: "내가 네게 명령한 것이 아니냐 강하고 담대하라 두려워하지 말며 놀라지 말라" },
+  ];
+
+  function normalize(w) {
+    return w.replace(/[.,!?;:"'“”‘’]+$/g, "").trim();
+  }
+
+  const CHO = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+  function choseongOfChar(ch) {
+    const code = ch.charCodeAt(0) - 0xac00;
+    if (code < 0 || code > 11171) return ch;
+    return CHO[Math.floor(code / (21 * 28))];
+  }
+  function choseongOfWord(w) {
+    return w.split("").map(choseongOfChar).join(" ");
+  }
+
+  function buildRound(prevIndex) {
+    let idx = Math.floor(Math.random() * VERSES.length);
+    if (VERSES.length > 1) {
+      while (idx === prevIndex) idx = Math.floor(Math.random() * VERSES.length);
+    }
+    const words = VERSES[idx].text.split(" ");
+    const blankMask = words.map(() => true);
+    return { verseIndex: idx, words, blankMask, completed: false, hintedIndex: null };
+  }
+
+  function emptyRoom() {
+    const round = buildRound(-1);
+    return { ...round, players: [], scores: {}, turnIndex: 0 };
+  }
+
+  const state = {
+    screen: "join",
+    nickname: "",
+    roomInput: "",
+    roomCode: "",
+    room: emptyRoom(),
+    input: "",
+    error: "",
+    flash: "",
+    flashPenalty: false,
+    loading: false,
+    copyOk: false,
+  };
+
+  let pollTimer = null;
+
+  // --- 서버 API (Netlify Function + Netlify Blobs) ---
+  async function fetchRoom() {
+    if (!state.roomCode) return null;
+    try {
+      const res = await fetch(`/api/room?code=${encodeURIComponent(state.roomCode)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.value || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function writeRoom(next) {
+    if (!state.roomCode) return { ok: false, reason: "no room" };
+    try {
+      const res = await fetch(`/api/room?code=${encodeURIComponent(state.roomCode)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+      return { ok: true, reason: "" };
+    } catch (e) {
+      return { ok: false, reason: (e && e.message) || "network error" };
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    const poll = async () => {
+      const data = await fetchRoom();
+      if (data) {
+        state.room = data;
+        const active = document.activeElement;
+        const typing = active && active.id === "vg-guess-input";
+        if (!typing) render();
+      }
+    };
+    poll();
+    pollTimer = setInterval(poll, 2000);
+  }
+  function stopPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  async function handleStart() {
+    const name = state.nickname.trim();
+    if (!name) {
+      state.error = "닉네임을 입력해 주세요.";
+      render();
+      return;
+    }
+    state.loading = true;
+    state.error = "";
+    render();
+
+    const code = state.roomInput.trim().toUpperCase() || Math.random().toString(36).slice(2, 6).toUpperCase();
+    state.roomCode = code;
+
+    let existing = await fetchRoom();
+    const data = existing || emptyRoom();
+    let players = data.players || [];
+    if (!players.find((p) => p.name === name)) {
+      players = [...players, { name, color: colorForIndex(players.length) }];
+    }
+    const next = { ...data, players };
+
+    const { ok, reason } = await writeRoom(next);
+    state.loading = false;
+    if (!ok) {
+      state.roomCode = "";
+      state.error = `방을 만들지 못했어요. (${reason})`;
+      render();
+      return;
+    }
+    state.room = next;
+    state.screen = "game";
+    render();
+    startPolling();
+  }
+
+  function currentTurnPlayer(room) {
+    const players = room.players || [];
+    if (players.length === 0) return null;
+    return players[(room.turnIndex || 0) % players.length];
+  }
+
+  async function handleHint() {
+    const fresh = (await fetchRoom()) || state.room;
+    const turnPlayer = currentTurnPlayer(fresh);
+    if (!turnPlayer || turnPlayer.name !== state.nickname.trim()) {
+      state.error = `지금은 ${turnPlayer ? turnPlayer.name : "다른 사람"}님 차례예요.`;
+      render();
+      return;
+    }
+    const blankIndices = fresh.blankMask.reduce((acc, isBlank, i) => {
+      if (isBlank) acc.push(i);
+      return acc;
+    }, []);
+    if (blankIndices.length === 0) return;
+    const idx = blankIndices[Math.floor(Math.random() * blankIndices.length)];
+
+    const next = { ...fresh, hintedIndex: idx };
+    const { ok } = await writeRoom(next);
+    if (ok) {
+      state.room = next;
+      render();
+    }
+  }
+
+  async function handleGuess(e) {
+    e.preventDefault();
+    const guess = normalize(state.input.trim());
+    if (!guess) return;
+    state.error = "";
+    state.loading = true;
+    render();
+
+    const fresh = (await fetchRoom()) || state.room;
+    const players = fresh.players || [];
+    const turnIndex = fresh.turnIndex || 0;
+    const turnPlayer = players.length > 0 ? players[turnIndex % players.length] : null;
+
+    if (turnPlayer && turnPlayer.name !== state.nickname.trim()) {
+      state.loading = false;
+      state.error = `지금은 ${turnPlayer.name}님 차례예요.`;
+      render();
+      return;
+    }
+
+    const idx = fresh.words.findIndex((w, i) => fresh.blankMask[i] && normalize(w) === guess);
+    const nextTurnIndex = players.length > 0 ? (turnIndex + 1) % players.length : 0;
+
+    if (idx === -1) {
+      const next = { ...fresh, turnIndex: nextTurnIndex };
+      const { ok } = await writeRoom(next);
+      state.loading = false;
+      if (ok) state.room = next;
+      state.error = "정답이 아니에요. 다음 사람 차례로 넘어가요.";
+      state.input = "";
+      render();
+      return;
+    }
+
+    const blankMask = [...fresh.blankMask];
+    blankMask[idx] = false;
+    const usedHint = fresh.hintedIndex === idx;
+    const basePoints = normalize(fresh.words[idx]).length || 1;
+    const points = usedHint ? Math.max(basePoints - 1, 0) : basePoints;
+    const scores = { ...(fresh.scores || {}) };
+    scores[state.nickname.trim()] = (scores[state.nickname.trim()] || 0) + points;
+    const completed = !blankMask.some(Boolean);
+
+    const next = { ...fresh, players, scores, blankMask, completed, turnIndex: nextTurnIndex, hintedIndex: null };
+    const { ok, reason } = await writeRoom(next);
+    state.loading = false;
+    if (!ok) {
+      state.error = `전송에 실패했어요. (${reason})`;
+      render();
+      return;
+    }
+    state.room = next;
+    state.input = "";
+    state.flash = fresh.words[idx];
+    state.flashPenalty = usedHint;
+    render();
+    setTimeout(() => {
+      state.flash = "";
+      state.flashPenalty = false;
+      render();
+    }, 1200);
+  }
+
+  async function handleNextVerse() {
+    state.loading = true;
+    render();
+    const fresh = (await fetchRoom()) || state.room;
+    const round = buildRound(fresh.verseIndex);
+    const next = { ...round, players: fresh.players || [], scores: fresh.scores || {}, turnIndex: 0 };
+    const { ok } = await writeRoom(next);
+    state.loading = false;
+    if (ok) state.room = next;
+    render();
+  }
+
+  function handleLeave() {
+    stopPolling();
+    state.screen = "join";
+    state.roomCode = "";
+    state.room = emptyRoom();
+    state.roomInput = "";
+    state.input = "";
+    state.error = "";
+    render();
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(state.roomCode);
+      state.copyOk = true;
+      render();
+      setTimeout(() => {
+        state.copyOk = false;
+        render();
+      }, 1200);
+    } catch (e) {}
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderJoin() {
+    return `
+      <div class="vg-wrap">
+        <div class="vg-card">
+          <div class="vg-badge"><span class="vg-serif vg-badge-text">말씀 채우기</span></div>
+          <p class="vg-sub">각자 폰이나 컴퓨터에서 같은 방 코드로 들어와 함께 빈칸을 채워요.</p>
+
+          <label class="vg-label">닉네임</label>
+          <input id="vg-nickname" class="vg-input-field" maxlength="10" placeholder="예: 은혜" value="${esc(state.nickname)}" />
+
+          <label class="vg-label">방 코드 (있으면 입력, 없으면 새로 만들어요)</label>
+          <input id="vg-roomcode" class="vg-input-field" style="text-transform:uppercase;letter-spacing:2px;" maxlength="4" placeholder="예: A1B2" value="${esc(state.roomInput)}" />
+
+          ${state.error ? `<div class="vg-error-text">${esc(state.error)}</div>` : ""}
+
+          <button id="vg-start-btn" class="vg-primary-btn" ${state.loading ? "disabled" : ""}>
+            ${state.loading ? "준비 중..." : state.roomInput ? "참가하기" : "새 방 만들기"}
+          </button>
+
+          <div class="vg-rule-box">
+            <div class="vg-rule-title">방법</div>
+            <div class="vg-rule-text">장·절만 보여주고 본문은 모두 가려져요. 참가한 순서대로 차례가 돌아가며, 자기 차례에 빈칸에 들어갈 단어를 입력해요. 맞히면 글자 수만큼 점수를 얻고, 맞히든 틀리든 다음 사람 차례로 넘어가요.</div>
+            <div class="vg-rule-title" style="margin-top:10px;">힌트 페널티</div>
+            <div class="vg-rule-text">힌트(초성) 버튼을 사용한 뒤 정답을 맞히면 획득 점수에서 <strong>1점이 차감</strong>돼요. 힌트는 남은 빈칸 중 무작위 위치에 대해 보여줘요.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGame() {
+    const room = state.room;
+    const players = room.players || [];
+    const scores = Object.entries(room.scores || {}).sort((a, b) => b[1] - a[1]);
+    const playerColor = (name) => (players.find((p) => p.name === name) || {}).color || "#C9A227";
+    const remaining = (room.blankMask || []).filter(Boolean).length;
+    const turnPlayer = currentTurnPlayer(room);
+    const isMyTurn = !!(turnPlayer && turnPlayer.name === state.nickname.trim());
+    const hintText = (room.hintedIndex !== null && room.hintedIndex !== undefined && room.blankMask[room.hintedIndex])
+      ? `초성 힌트: ${choseongOfWord(normalize(room.words[room.hintedIndex]))}`
+      : "";
+
+    const scoreRowHtml = scores.length === 0
+      ? `<span class="vg-score-empty">아직 참가자가 없어요</span>`
+      : scores.map(([name, count]) => `
+          <div class="vg-score-chip" style="border-color:${playerColor(name)}">
+            <span class="vg-score-dot" style="background:${playerColor(name)}"></span>
+            <span style="font-weight:${name === state.nickname.trim() ? 700 : 500}">${esc(name)}</span>
+            <span class="vg-score-count">${count}</span>
+          </div>
+        `).join("");
+
+    const turnHtml = turnPlayer
+      ? `<span class="vg-turn-dot" style="background:${turnPlayer.color}"></span>` +
+        (isMyTurn
+          ? `<span class="vg-turn-text-mine">내 차례예요!</span>`
+          : `<span class="vg-turn-text">${esc(turnPlayer.name)}님 차례</span>`)
+      : `<span class="vg-turn-text">참가자를 기다리는 중</span>`;
+
+    const verseLineHtml = (room.words || []).map((w, i) => {
+      const isBlank = room.blankMask && room.blankMask[i];
+      if (isBlank) {
+        const len = normalize(w).length || 1;
+        return `<span class="vg-serif vg-blank-tile" style="width:${22 * len + 16}px">${"·".repeat(len)}</span>`;
+      }
+      const justFilled = state.flash === w;
+      return `<span class="vg-serif vg-word-tile ${justFilled ? "vg-fill" : ""}">${esc(w)}</span>`;
+    }).join("");
+
+    return `
+      <div class="vg-game-wrap">
+        <div class="vg-header">
+          <div>
+            <div class="vg-header-label">방 코드</div>
+            <button id="vg-copy-btn" class="vg-room-code-btn">${esc(state.roomCode)} ${state.copyOk ? "· 복사됨" : "· 탭해서 복사"}</button>
+          </div>
+          <button id="vg-leave-btn" class="vg-leave-btn">나가기</button>
+        </div>
+
+        <div class="vg-score-row vg-scroll">${scoreRowHtml}</div>
+
+        <div class="vg-turn-banner">${turnHtml}</div>
+
+        <div class="vg-verse-area vg-scroll">
+          <div class="vg-ref-badge vg-serif">${esc((VERSES[room.verseIndex] || {}).ref || "")}</div>
+          <div class="vg-verse-line">${verseLineHtml}</div>
+
+          ${room.completed
+            ? `<div class="vg-complete-box">
+                 <div class="vg-complete-title">✨ 말씀을 완성했어요!</div>
+                 <button id="vg-next-btn" class="vg-next-btn" ${state.loading ? "disabled" : ""}>다음 말씀</button>
+               </div>`
+            : `<div class="vg-remaining-text">남은 빈칸 ${remaining}개</div>`}
+        </div>
+
+        ${state.flash ? `<div class="vg-toast vg-flash-toast">✔ "${esc(state.flash)}" 정답!${state.flashPenalty ? " (힌트 사용 -1점)" : ""}</div>` : ""}
+        ${state.error ? `<div class="vg-error-toast">${esc(state.error)}</div>` : ""}
+        ${hintText ? `<div class="vg-hint-text">${esc(hintText)}</div>` : ""}
+
+        ${!room.completed ? `
+          <form id="vg-guess-form" class="vg-input-bar">
+            <button id="vg-hint-btn" type="button" class="vg-hint-btn" ${(state.loading || !isMyTurn) ? "disabled" : ""}>힌트</button>
+            <input id="vg-guess-input" class="vg-game-input" autocomplete="off"
+              placeholder="${isMyTurn ? "빈칸에 들어갈 단어" : (turnPlayer ? esc(turnPlayer.name) + "님 차례를 기다려요" : "")}"
+              value="${esc(state.input)}" ${isMyTurn ? "" : "disabled"} />
+            <button id="vg-submit-btn" class="vg-submit-btn" type="submit" ${(state.loading || !isMyTurn) ? "disabled" : ""}>채우기</button>
+          </form>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  function render() {
+    const root = document.getElementById("vg-app");
+    root.innerHTML = state.screen === "join" ? renderJoin() : renderGame();
+    attachHandlers();
+  }
+
+  function attachHandlers() {
+    if (state.screen === "join") {
+      const nick = document.getElementById("vg-nickname");
+      const room = document.getElementById("vg-roomcode");
+      const startBtn = document.getElementById("vg-start-btn");
+      if (nick) nick.addEventListener("input", (e) => { state.nickname = e.target.value; });
+      if (room) room.addEventListener("input", (e) => { state.roomInput = e.target.value.toUpperCase(); });
+      if (startBtn) startBtn.addEventListener("click", handleStart);
+    } else {
+      const copyBtn = document.getElementById("vg-copy-btn");
+      const leaveBtn = document.getElementById("vg-leave-btn");
+      const form = document.getElementById("vg-guess-form");
+      const input = document.getElementById("vg-guess-input");
+      const nextBtn = document.getElementById("vg-next-btn");
+      const hintBtn = document.getElementById("vg-hint-btn");
+      if (copyBtn) copyBtn.addEventListener("click", handleCopy);
+      if (leaveBtn) leaveBtn.addEventListener("click", handleLeave);
+      if (form) form.addEventListener("submit", handleGuess);
+      if (input) input.addEventListener("input", (e) => { state.input = e.target.value; });
+      if (nextBtn) nextBtn.addEventListener("click", handleNextVerse);
+      if (hintBtn) hintBtn.addEventListener("click", handleHint);
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

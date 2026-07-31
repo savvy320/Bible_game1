@@ -495,7 +495,14 @@
       const room = document.getElementById("vg-roomcode");
       const startBtn = document.getElementById("vg-start-btn");
       if (nick) nick.addEventListener("input", (e) => { state.nickname = e.target.value; });
-      if (room) room.addEventListener("input", (e) => { state.roomInput = e.target.value.toUpperCase(); });
+      if (room) room.addEventListener("input", (e) => {
+        state.roomInput = e.target.value.toUpperCase();
+        e.target.value = state.roomInput;
+        const btn = document.getElementById("vg-start-btn");
+        if (btn && !state.loading) {
+          btn.textContent = state.roomInput ? "참가하기" : "새 방 만들기";
+        }
+      });
       if (startBtn) startBtn.addEventListener("click", handleStart);
     } else {
       const copyBtn = document.getElementById("vg-copy-btn");
